@@ -1,0 +1,159 @@
+---
+title: "Tutorial"
+author: "Altamash Rafiq"
+date: "9/9/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, comment = NA, cache = TRUE)
+library(tidyverse)
+library(kableExtra)
+library(gridExtra)
+library(ggfortify)
+```
+
+```{r}
+###### Load the data
+lalondedata <-
+  read.table(
+    "lalondedata.txt",
+    header = TRUE,
+    sep = ",",
+    colClasses = c(
+      "factor",
+      "factor",
+      "numeric",
+      "numeric",
+      "factor",
+      "factor",
+      "factor",
+      "factor",
+      "numeric",
+      "numeric",
+      "numeric"
+    )
+  )
+
+lalondedata$diff <- lalondedata$re78 - lalondedata$re74
+lalondedata$agec <- c(scale(lalondedata$age, scale = F))
+lalondedata$educc <- c(scale(lalondedata$educ, scale = F))
+lalondedata$educc2 <- lalondedata$educc ^ 2
+
+Model2 <-
+  lm(
+    diff ~ treat + black + hispan + agec + married + treat:agec + educc + educc2
+    + agec:married,
+    data = lalondedata
+  )
+
+d <- round(coef(summary(Model2)), 2)
+
+kbl(d) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  row_spec(c(1,2,5,6,8,9,10), bold = T, color = "white", background = "#2166AC")
+```
+
+```{r}
+age20 <-
+  data.frame(
+    treat = factor(0, levels = c(0, 1)),
+    black = factor(0, levels = c(0, 1)),
+    hispan = factor(0, levels = c(0, 1)),
+    agec = 20 - mean(lalondedata$age),
+    married = factor(0, levels = c(0, 1)),
+    educc = 0,
+    educc2 = 0,
+    nodegree = factor(0, levels = c(0, 1))
+  )
+age30 <-
+  data.frame(
+    treat = factor(0, levels = c(0, 1)),
+    black = factor(0, levels = c(0, 1)),
+    hispan = factor(0, levels = c(0, 1)),
+    agec = 30 - mean(lalondedata$age),
+    married = factor(0, levels = c(0, 1)),
+    educc = 0,
+    educc2 = 0,
+    nodegree = factor(0, levels = c(0, 1))
+  )
+age40 <-
+  data.frame(
+    treat = factor(0, levels = c(0, 1)),
+    black = factor(0, levels = c(0, 1)),
+    hispan = factor(0, levels = c(0, 1)),
+    agec = 40 - mean(lalondedata$age),
+    married = factor(0, levels = c(0, 1)),
+    educc = 0,
+    educc2 = 0,
+    nodegree = factor(0, levels = c(0, 1))
+  )
+pred20 <- predict(Model2, age20)
+pred30 <- predict(Model2, age30)
+pred40 <- predict(Model2, age40)
+
+e <- data.frame(o = "Difference in earnings between 1978 and 1974",
+                a = pred20,
+                b = pred30,
+                d = pred40)
+colnames(e) <- c("Age", "20", "30", "40")
+kbl(e) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) 
+
+age201 <-
+  data.frame(
+    treat = factor(1, levels = c(0, 1)),
+    black = factor(0, levels = c(0, 1)),
+    hispan = factor(0, levels = c(0, 1)),
+    agec = 20 - mean(lalondedata$age),
+    married = factor(0, levels = c(0, 1)),
+    educc = 0,
+    educc2 = 0,
+    nodegree = factor(0, levels = c(0, 1))
+  )
+age301 <-
+  data.frame(
+    treat = factor(1, levels = c(0, 1)),
+    black = factor(0, levels = c(0, 1)),
+    hispan = factor(0, levels = c(0, 1)),
+    agec = 30 - mean(lalondedata$age),
+    married = factor(0, levels = c(0, 1)),
+    educc = 0,
+    educc2 = 0,
+    nodegree = factor(0, levels = c(0, 1))
+  )
+age401<-
+  data.frame(
+    treat = factor(1, levels = c(0, 1)),
+    black = factor(0, levels = c(0, 1)),
+    hispan = factor(0, levels = c(0, 1)),
+    agec = 40 - mean(lalondedata$age),
+    married = factor(0, levels = c(0, 1)),
+    educc = 0,
+    educc2 = 0,
+    nodegree = factor(0, levels = c(0, 1))
+  )
+pred201 <- predict(Model2, age201)
+pred301 <- predict(Model2, age301)
+pred401 <- predict(Model2, age401)
+
+e <- data.frame(o = "Difference in earnings between 1978 and 1974
+                for those who received training",
+                a = pred201,
+                b = pred301,
+                d = pred401)
+colnames(e) <- c("Age", "20", "30", "40")
+kbl(e) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) 
+
+```
+
+
+
+
+
+
+
+

@@ -1,0 +1,525 @@
+---
+title: "Team Project 1"
+author:
+    - Pranav Manjunath (Checker, Coordinator)
+    - Aiman Haider     (Presenter)
+    - Xinyi Pan        (Programmer)
+    - Maobin Guo       (Writer)
+output:
+  pdf_document: default
+  word_document: default
+  html_document:
+    
+    df_print: paged
+---
+
+```{r, echo=FALSE, include=FALSE, message=FALSE}
+
+###### Clear environment and load libraries
+rm(list = ls())
+
+options(warn=-1)
+options(xtable.comment = FALSE)
+
+library(broom) 
+library(ggplot2)
+library(xtable)
+library(rms)
+library(pROC)
+library(e1071)
+library(caret)
+require(gridExtra)
+library(MASS)
+library(arm)
+
+###### Load the data
+lalondedata <-
+  read.table(
+    "lalondedata.csv",
+    header = TRUE,
+    sep = ",",
+    colClasses = c(
+      "factor",
+      "factor",
+      "numeric",
+      "numeric",
+      "factor",
+      "factor",
+      "factor",
+      "factor",
+      "numeric",
+      "numeric",
+      "numeric"
+    )
+  )
+
+
+lalondedata$diff <- lalondedata$re78 - lalondedata$re74
+dim(lalondedata)
+str(lalondedata)
+summary(lalondedata)
+
+lalondedata$agec <- c(scale(lalondedata$age, scale = F))
+lalondedata$educc <- c(scale(lalondedata$educ, scale = F))
+lalondedata$educc2 <- lalondedata$educc ^ 2
+
+```
+
+# Part I
+
+## Summary
+
+In this investigation, a linear regression model was built to quest whether or not workers who receive job training tend to earn higher wages than workers who do not receive job training. This research is based on a dataset from the National Supported Work (NSW) Demonstration (1975-1978). For detailed information on this research, please check the following papers. 
+
+- [Paper 1](https://www.jstor.org/tc/accept?origin=%2Fstable%2Fpdf%2F1806062.pdf)
+- [Paper 2](https://uh.edu/~adkugler/Dehejia&Wahba_JASA.pdf)
+
+
+## Introduction
+
+In the 1970s, researchers in the United States ran several randomized experiments to evaluate public policy programs. One of the most famous experiments is the National Supported Work (NSW) Demonstration, in which researchers wanted to assess whether or not job training for disadvantaged workers had an effect on their wages. This analysis is base on a subset of the investigation. We try to answer the following question with a linear regression model based on such data. 
+
+- Weather the job training did increase the workers' annual salary. If so, how many salary was increased by the training. 
+
+- Did the effect of job training variy by other factors. 
+
+- Aside from the training, is there any other factors would influence the workers' salaery ?
+ 
+
+## DATA & EDA 
+
+### Response Variable
+
+Since the goal is to determine the effects of job training on salary increment, the response variable is the difference in salary between 1974 and 1978. Its distribution is quite normal; hence there is no transformation for the response variable. 
+
+```{r, echo=FALSE, out.height='20%', fig.align='center', fig.show='hold'}
+
+ggplot(lalondedata, aes(x = diff)) +
+  geom_histogram(
+    aes(y = ..density..),
+    color = "black",
+    linetype = "dashed",
+    fill = rainbow(35),
+    binwidth = 2500
+  ) +
+  geom_density(alpha = .25, fill = "lightblue") +
+  scale_fill_brewer(palette = "Blues") +
+  labs(title = "Distribution of Real Annual Earnings Difference between 1978 and 1974",
+       x = "Real Annual Earnings Difference") +
+  theme_classic() + theme(legend.position = "none")
+
+
+```
+
+### Predict Vraibles
+
+Unlike the relationship between age and 'treat' (Right), the relationship between education(left) and 'treat' is not linear. It indicates that there is some non-linear transformation should be performed on education. After evaluation, we decide to use the square to transform the variable, and the final model's p-value confirmed the is.
+
+```{r, echo=FALSE, out.width=c('50%', '50%'), out.height='20%', fig.show='hold', message=FALSE}
+
+# educ
+ggplot(lalondedata, aes(x = educ, y = diff)) +
+  geom_point(alpha = .5, colour = "blue4") +
+  geom_smooth(col = "red3") +
+  theme_classic() +
+  labs(title = "Difference in Earnings vs Education", x = "Education",
+       y = "Difference in Earnings")
+
+ggplot(lalondedata, aes(x = age, y = diff)) +
+  geom_point(alpha = .5, colour = "blue4") +
+  geom_smooth(method = "lm", col = "red3") +
+  theme_classic() +
+  labs(title = "Difference in Earnings vs Age", x = "Age",
+       y = "Difference in Earnings")
+
+```
+
+
+### Multicollinearity
+
+Intuitively, education duration has a strong correlation with a high school degree.  In this dataset, the correlation of the two variables is `r cor(as.numeric(lalondedata$nodegree), lalondedata$educ)` which suggests that we could not include both of them in our model. After evaluation, education duration was preserved since it can provide more information than the high school degree variable.
+
+
+### Interactions 
+
+
+
+```{r, echo=FALSE,  fig.show='hold', out.height='20%', fig.align='center' , message=FALSE}
+
+ggplot(lalondedata, aes(x = age, y = diff)) +
+  geom_point(alpha = .5, colour = "blue4") +
+  geom_smooth(method = "lm", col = "red3") +
+  theme_classic() +
+  labs(title = "The difference in Earnings vs Age influenced by treat", x = "Treat",
+       y = "Difference in Earnings") +
+  facet_wrap( ~ treat)
+
+```
+
+
+
+## Model
+
+
+### Model selection
+
+1. We find some signs of interaction between "treat" and "age" in EDA. The business was confirmed in our model. Its p-value is significantly small than 0.05. 
+
+2. Interaction between "married" and "age" was found in this step. It's p-Value is slightly above 0.05, but it small than 0.1. The ANOVA test also indicates that it would improve our model significantly. Hence it was preserved in our final model. 
+
+3. The education was not linear in the plot of EDA, and this finding was also confirmed. Its square transformation was significant (p-value: 0.03).  
+
+### Final model
+
+$$
+\begin{aligned}
+diff = &\beta_{0} + \beta_{1}*black + \beta_{2}*hispan + \beta_{3}*agec + \\ 
+                 &\beta_{4}*married + \beta_{5}*treat:agec + \beta_{6}*educc + \\
+                 &\beta_{7}*educc^2 + \beta_{8}agec:married
+\end{aligned}
+$$
+
+- agec: Centred age
+
+- educc: Centred educ
+
+\hfill\break
+
+### Model Summary & CI
+
+\hfill\break
+
+```{r echo = FALSE, results='asis', hold_position=TRUE}
+
+final_model <-
+  lm(
+    diff ~ treat + black + hispan + agec + married + treat:agec + educc + educc2
+    + agec:married,
+    data = lalondedata
+  )
+
+fsta <- summary(final_model)$fstatistic
+model_pvalue <- pf(fsta[1],fsta[2],fsta[3],lower.tail=F)
+
+xtable(final_model, caption = "Coefficients")
+
+tdf <- data.frame(
+    pValue = formatC(model_pvalue, format = "e", digits = 2),
+    RSquare = c(round(summary(final_model)$r.squared, 2))
+)
+
+xtable(tdf, caption = "Evaluationl")
+
+xtable(confint(final_model), caption = "Confidence Interval")
+
+```
+\hfill\break
+
+### Model Verification 
+
+#### Residuals
+
+```{r echo = FALSE, out.width=c('50%', '50%'), out.height='20%', fig.align='center', fig.show='hold'}
+
+plot(final_model, which=1)
+plot(final_model, which=3)
+
+```
+
+- The residuals are scattered randomly; there is no apparent trend in the plots.
+- The error is no correlation of error terms in the plot.
+- The variance of the error is constant, there is no apparent change along the x-axis. 
+
+**Summary:** 
+According to residual analysis, there is no obvious evidence indicate the assumptions of linear regression were broken. 
+
+#### Outliers and High Leverage
+
+\hfill\break
+
+```{r echo = FALSE, out.width=c('30%', '30%', '30%'),  out.height='20%', message=FALSE, hold_position=TRUE}
+
+# Outliers
+plot(final_model, which=2)
+
+# Outliers
+lev_scores <- hatvalues(final_model)
+p<- 9
+n <- nrow(lalondedata)
+plot(lev_scores, col=ifelse(lev_scores > (2*p/n), 'red2', 'navy'), type="h", ylab="Leverage score",xlab="Index",main="Leverage Scores for all observations")
+
+# High Influence
+plot(final_model, which=5, main = "Cook's Distance Analysis")
+
+```
+
+- There are a few outliers under this model.
+- There are some high leverage points. 
+- According to cook's distance, there is no high influence points (> 0.5).
+
+**Summary:** 
+There are some outliers and high leverage points; however, there are not high influence data. Hence, these data points can be preserved in the model without worry. 
+
+#### Collinearity 
+
+\hfill\break
+```{r echo = FALSE, results='asis', message=FALSE, hold_position=TRUE}
+
+
+xtable(tidy(vif(final_model)))
+
+```
+
+- According to VIF table, there is obvious colineary problem in this model. 
+
+## Conclusion
+
+1. Tread has positive effects on workers' annual salary because its p-value is significant. Controlling other factors, taking job training would increase $3254 on annual salary on average. It's 95% CI  is (1516, 4991)
+
+2. The effect varies by age. The interaction of treat and age is significant in our model. Workers who received training would receive $124 per year for per 1-year increase in age, while the no-training workers' salary would decrease by $322 per year for per 1-year increase in age.
+
+3. Other interesting associations with wages:
+
+- Marriage would significantly bring down workers' annual salary by $1879 (95% CI is 452, 3307)
+
+- Education duration would increase workers' salaries. For 1 unit increase for its square, the annual salary would increase by $55 (95% CI: 3, 108) 
+
+- Age and married have weak interaction. Controlled other factors, for the married workers, while the old ones would receive more salary. One year increase on age would raise the workers' salary by $137 per year (95% CI: -2, 278)
+
+
+## Deficiency
+
+1. The final model's R-squared is only 0.088, which is relatively low. 
+
+2. Some outliers deserve further investigation. 
+
+
+\newpage
+
+# Part II
+
+## Summary
+
+
+
+## Introduction
+
+## DATA & EDA
+
+```{r, echo=FALSE, message=FALSE}
+
+rm(list = ls())
+
+lalondedata <-
+  read.table(
+    "lalondedata.csv",
+    header = TRUE,
+    sep = ",",
+    colClasses = c(
+      "factor",
+      "factor",
+      "numeric",
+      "numeric",
+      "factor",
+      "factor",
+      "factor",
+      "factor",
+      "numeric",
+      "numeric",
+      "numeric"
+    )
+  )
+
+lalondedata$earn <- ifelse(lalondedata$re78 > 0, 1, 0)
+
+lalondedata$earnf <-
+  factor(
+    ifelse(lalondedata$re78 > 0, 1, 0),
+    levels = c(0, 1),
+    labels = c("Zero", "Positive")
+  )
+
+
+lalondedata$agec <- lalondedata$age - mean(lalondedata$age)
+lalondedata$educc <- lalondedata$educ - mean(lalondedata$educ)
+lalondedata$agec2 <- lalondedata$agec ^ 2
+
+```
+
+
+###  Response Variable
+
+
+
+### Predict Vraibles
+
+
+
+### Multicollinearity
+
+
+### Interactions
+
+
+## Model
+
+
+### Model selection
+
+### Final model
+
+
+$$
+\begin{aligned}
+logit(\pi_{i}) = &\beta_{0} + \beta_{1}*treat + \beta_{2}*black + \beta_{3}*hispan + \\                                     &\beta_{4}*agec + \beta_{5}*agec^2 + \beta_{6}*nodegree + \beta_{7}*married + \\
+                 &\beta_{8}*agec:treat + beta_{9}*black:treat +\\
+                 &\beta_{10}*hispan:treat + \beta_{11}*hispan:married
+\end{aligned}
+$$
+
+```{r, echo=FALSE, message=FALSE}
+
+full_model <-
+  glm(
+    earn ~ treat * (black + hispan + agec) + agec2 + nodegree + married + agec:nodegree + hispan:married,
+    data = lalondedata,
+    family = binomial
+  )
+
+res1 <- residuals(full_model,"resp")
+
+model_sum <- summary(full_model)
+
+```
+
+
+
+### Model Summary & CI
+
+
+```{r echo = FALSE, results='asis'}
+
+xtable(model_sum, caption = "Coefficients")
+ 
+model_confint <- confint(full_model)
+
+xtable(model_confint, caption = "Confidence Interval")
+
+ 
+tdf <- data.frame(
+    NULL_deviance = round(model_sum$null.deviance,2),
+    Residual_deviance = round(model_sum$deviance,2)
+)
+
+xtable(tdf, caption = "Evaluationl")
+
+```
+
+\hfill\break
+
+
+ 
+### Model Verification
+
+
+#### Residuals
+
+
+#### Outliers and High Leverage
+
+
+#### Collinearity
+
+
+## Conclusion
+
+
+## Deficiency
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

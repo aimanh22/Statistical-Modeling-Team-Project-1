@@ -2,7 +2,7 @@
 title: "Team Project 1"
 author:
     - Pranav Manjunath (Checker, Coordinator)
-    - Aiman Haider     (Presenter)
+    - Aiman Haider     Presenter)
     - Xinyi Pan        (Programmer)
     - Maobin Guo       (Writer)
 output:
